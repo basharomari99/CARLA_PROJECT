@@ -91,6 +91,7 @@ PLAYER_BLUEPRINT_ID = "vehicle.audi.tt"
 BAREL_BLUIPRIT_ID = "static.prop.barrel"
 BEYOND_CAR_BLUEPRINT_ID = "vehicle.chevrolet.impala"
 to_destroy_spawn_list = {}
+CARS_Z_POSITION = 0.5999999642372131
 ##################################
 DEBUG_EN = True
 from carla import ColorConverter as cc
@@ -176,7 +177,7 @@ def spawn_barrier(world, location, rotation=(0, 0, 0),barrier_type='static.prop.
     return barrier
 
 
-def spawn_static_car(world, location, rotation = (0.0,180.0,0.0)):
+def spawn_static_car(world, location, rotation = (0.0,180.0,0.0),cars_filter=None):
     """
     Spawn a static car at a specified location with a specified orientation in CARLA.
 
@@ -187,7 +188,8 @@ def spawn_static_car(world, location, rotation = (0.0,180.0,0.0)):
     # Example vertical orientation (yaw = 90 degrees, pitch = 90 degrees, roll = 0 degrees)
     """
     blueprint_library = world.get_blueprint_library()
-    vehicle_bp =  random.choice(blueprint_library.filter('vehicle.*'))  # Choose a vehicle blueprint
+    cars_filter = 'vehicle.*' if cars_filter is None else cars_filter
+    vehicle_bp = random.choice(blueprint_library.filter(cars_filter))  # Choose a vehicle blueprint
 
     # Create the location and rotation objects
     location = carla.Location(x=location[0], y=location[1], z=location[2])
@@ -207,7 +209,7 @@ def set_up_lesson_static_environmen(world):
     barrier1 = spawn_barrier(world, (10.0, 131.21006774902344, 0.0), (0, 90, 0))
     barrier2 = spawn_barrier(world, (10.0, 129.21006774902344, 0.0), (0, 90, 0))
     barrier3 = spawn_barrier(world, (-31.0, 129.21006774902344, 0.0), (0, 90, 0))
-    barrier4 = spawn_barrier(world, (-31.0, 131.210067749023444, 0.0), (0, 90, 0))
+    barrier4 = spawn_barrier(world, (-31.0, 130.810067749023444, 0.0), (0, 90, 0))
     to_destroy_spawn_list["barrier1"] = barrier1
     to_destroy_spawn_list["barrier2"] = barrier2
     to_destroy_spawn_list["barrier3"] = barrier3
@@ -219,7 +221,7 @@ def set_up_lesson_static_environmen(world):
         static_car = None
         j = 10
         while static_car is None and j > 0:
-            static_car = spawn_static_car(world, (x_pos, 130.21006774902344, 0.5999999642372131))
+            static_car = spawn_static_car(world, (x_pos, 130.21006774902344, CARS_Z_POSITION))
             if static_car is not None:
                 allocated_static_cars.append(static_car)
                 #calculating created car length
@@ -232,15 +234,73 @@ def set_up_lesson_static_environmen(world):
     for i in range(len(allocated_static_cars)):
         to_destroy_spawn_list[f"static_car_{i + 1}/{len(allocated_static_cars)}"] = allocated_static_cars[i]
 
+    constructions_car = spawn_static_car(world=world,location=(-59.7, 126.71006774902344, CARS_Z_POSITION),rotation=(0,200,0),cars_filter="vehicle.carlamotors.european_hgv")
+    to_destroy_spawn_list[f"construction_car"] = constructions_car
+    ambulance = spawn_static_car(world=world,location=(-52.5, 124.9, CARS_Z_POSITION),rotation=(0,270,0),cars_filter="vehicle.ford.ambulance")
+    to_destroy_spawn_list[f"ambulance"] = ambulance
+
     b_loops = 3
     for i in range(b_loops):
         barrier = spawn_barrier(world, (-39.50 - i * 2, 124.2, 0.0), (0, 0, 0))
         to_destroy_spawn_list[f"turn_barrier{i + 1}/{b_loops}"] = barrier
 
     t_loops = 5
+    x_pos = -35.0
     for i in range(t_loops):
-        cone = spawn_barrier(world, (-35.0 - i * 4, 130.21006774902344, 0.0), (0, 90, 0),'static.prop.trafficcone02')
+        cone = spawn_barrier(world, (x_pos, 130.21006774902344, 0.0), (0, 90, 0),'static.prop.trafficcone01')
+        x_pos = x_pos - 4
         to_destroy_spawn_list[f"cone{i + 1}/{t_loops}"] = cone
+    c_loops = 2
+    for i in range(c_loops):
+        wsign = spawn_barrier(world, (x_pos,130.21006774902344, 0.0), (0, 270, 0), 'static.prop.warningconstruction')
+        x_pos = x_pos - 4
+        to_destroy_spawn_list[f"wsign{i + 1}/{c_loops}"] = wsign
+    d_loops = 4
+
+    for i in range(d_loops):
+        dirt = spawn_barrier(world, (x_pos, 128.21006774902344 - (i % 2)*2, 0.0), (0, 270, 0), 'static.prop.dirtdebris01')
+        x_pos = x_pos - (1- i % 2) * 4
+        to_destroy_spawn_list[f"cdirt{i + 1}/{d_loops}"] = dirt
+
+
+def set_light_state(vehicle, brake_light_on):
+    # Retrieve the current light state
+    current_light_state = vehicle.get_light_state()
+
+    # Determine the new light state based on the brake_light_on flag
+    if brake_light_on:
+        # Turn on the brake lights
+        new_light_state = current_light_state | carla.VehicleLightState.Brake
+    else:
+        # Turn off the brake lights
+        new_light_state = current_light_state & ~carla.VehicleLightState.Brake
+
+    # Apply the new light state to the vehicle
+    vehicle.set_light_state(carla.VehicleLightState(new_light_state))
+
+
+def set_speed(vehicle, target_speed):
+    control = carla.VehicleControl()
+    velocity = vehicle.get_velocity()
+    current_speed = (velocity.x**2 + velocity.y**2 + velocity.z**2)**0.5
+
+    # Basic control logic to adjust throttle and brake
+    if current_speed < target_speed:
+        control.throttle = min((target_speed - current_speed) / target_speed, 1.0)
+        control.brake = 0.0
+        set_light_state(vehicle,brake_light_on=False)
+    else:
+        control.throttle = 0.0
+        if target_speed > 0:
+            control.brake = min((current_speed - target_speed) / target_speed, 1.0)
+            set_light_state(vehicle,brake_light_on=True)
+        else:
+            # If target_speed is zero, apply full braking or handle as needed
+            control.brake = 1.0
+            set_light_state(vehicle,brake_light_on=True)
+
+
+    vehicle.apply_control(control)
 
 def init_spawn_active_car(name,world,blueprint,spawn_point):
     car = world.try_spawn_actor(blueprint, spawn_point)
@@ -359,8 +419,11 @@ class World(object):
         ]
 
     def restart(self):
-        self.player_max_speed = 1.589
-        self.player_max_speed_fast = 3.713
+        # self.player_max_speed = 1.589
+        # self.player_max_speed_fast = 3.713
+        self.player_max_speed = 0.7
+        self.player_max_speed_fast = 1.8
+
         # Keep same camera config if the camera manager exists.
         cam_index = self.camera_manager.index if self.camera_manager is not None else 0
         cam_pos_index = self.camera_manager.transform_index if self.camera_manager is not None else 0
@@ -482,6 +545,14 @@ class World(object):
         self.camera_manager.sensor.destroy()
         self.camera_manager.sensor = None
         self.camera_manager.index = None
+
+    def modify_beyond_car_args(self):
+        velocity = self.player.get_velocity()
+        speed = velocity.length()
+        to_set = speed * 2 if speed <= 20 else 10
+        if self.beyond_car.get_transform().location.x <= -50.0:
+            to_set = 0
+        set_speed(self.beyond_car,to_set)
 
     def destroy(self):
         global to_destroy_spawn_list
@@ -1423,6 +1494,7 @@ def game_loop(args):
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock, args.sync):
                 return
+            world.modify_beyond_car_args()
             world.tick(clock)
             world.render(display)
             pygame.display.flip()
@@ -1435,7 +1507,6 @@ def game_loop(args):
 
         if (world and world.recording_enabled):
             client.stop_recorder()
-
         if world is not None:
             world.destroy()
 
