@@ -81,15 +81,19 @@ except IndexError:
 
 
 import carla
-
+############################DEBGUS##################
+PRINT_SPAWN_POINTS = False
+#vehicle.bh.crossbike,"vehicle.chevrolet.impala
+####################################################
 
 ################METADATA #############
-LESSON_ID = 0
-SPAWN_POINT_PLAYER_INDEX = 128
-BEYOND_CAR_INDEX = 18
+LESSON_ID = 1
+SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128,1:85}#85
+BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
 PLAYER_BLUEPRINT_ID = "vehicle.audi.tt"
 BAREL_BLUIPRIT_ID = "static.prop.barrel"
 BEYOND_CAR_BLUEPRINT_ID = "vehicle.chevrolet.impala"
+BEYOND_CAR_BLUEPRINT_ID_DICT = {0:"vehicle.chevrolet.impala",1:"vehicle.bh.crossbike"}
 to_destroy_spawn_list = {}
 CARS_Z_POSITION = 0.5999999642372131
 ##################################
@@ -206,64 +210,107 @@ def spawn_static_car(world, location, rotation = (0.0,180.0,0.0),cars_filter=Non
         print(f"Failed to spawn car: {e}")
     
 def set_up_lesson_static_environmen(world):
-    barrier1 = spawn_barrier(world, (10.0, 131.21006774902344, 0.0), (0, 90, 0))
-    barrier2 = spawn_barrier(world, (10.0, 129.21006774902344, 0.0), (0, 90, 0))
-    barrier3 = spawn_barrier(world, (-31.0, 129.21006774902344, 0.0), (0, 90, 0))
-    barrier4 = spawn_barrier(world, (-31.0, 130.810067749023444, 0.0), (0, 90, 0))
-    to_destroy_spawn_list["barrier1"] = barrier1
-    to_destroy_spawn_list["barrier2"] = barrier2
-    to_destroy_spawn_list["barrier3"] = barrier3
-    to_destroy_spawn_list["barrier4"] = barrier4
-    loops = 5
-    x_pos = 2.6
-    allocated_static_cars = []
-    for i in range(loops):
-        static_car = None
-        j = 10
-        while static_car is None and j > 0:
-            static_car = spawn_static_car(world, (x_pos, 130.21006774902344, CARS_Z_POSITION))
-            if static_car is not None:
-                allocated_static_cars.append(static_car)
-                #calculating created car length
-                bounding_box = static_car.bounding_box
-                car_length = bounding_box.extent.x * 2
-                x_pos = (x_pos - car_length - 3)
-            j -= 1
-        if x_pos <= -25.9:
-            break
-    for i in range(len(allocated_static_cars)):
-        to_destroy_spawn_list[f"static_car_{i + 1}/{len(allocated_static_cars)}"] = allocated_static_cars[i]
+    if LESSON_ID == 0:
+        barrier1 = spawn_barrier(world, (10.0, 131.21006774902344, 0.0), (0, 90, 0))
+        barrier2 = spawn_barrier(world, (10.0, 129.21006774902344, 0.0), (0, 90, 0))
+        barrier3 = spawn_barrier(world, (-31.0, 129.21006774902344, 0.0), (0, 90, 0))
+        barrier4 = spawn_barrier(world, (-31.0, 130.810067749023444, 0.0), (0, 90, 0))
+        to_destroy_spawn_list["barrier1"] = barrier1
+        to_destroy_spawn_list["barrier2"] = barrier2
+        to_destroy_spawn_list["barrier3"] = barrier3
+        to_destroy_spawn_list["barrier4"] = barrier4
+        loops = 5
+        x_pos = 2.6
+        allocated_static_cars = []
+        for i in range(loops):
+            static_car = None
+            j = 10
+            while static_car is None and j > 0:
+                static_car = spawn_static_car(world, (x_pos, 130.21006774902344, CARS_Z_POSITION))
+                if static_car is not None:
+                    allocated_static_cars.append(static_car)
+                    #calculating created car length
+                    bounding_box = static_car.bounding_box
+                    car_length = bounding_box.extent.x * 2
+                    x_pos = (x_pos - car_length - 3)
+                j -= 1
+            if x_pos <= -25.9:
+                break
+        for i in range(len(allocated_static_cars)):
+            to_destroy_spawn_list[f"static_car_{i + 1}/{len(allocated_static_cars)}"] = allocated_static_cars[i]
 
-    constructions_car = spawn_static_car(world=world,location=(-59.7, 126.71006774902344, CARS_Z_POSITION),rotation=(0,200,0),cars_filter="vehicle.carlamotors.european_hgv")
-    to_destroy_spawn_list[f"construction_car"] = constructions_car
-    ambulance = spawn_static_car(world=world,location=(-52.5, 124.9, CARS_Z_POSITION),rotation=(0,270,0),cars_filter="vehicle.ford.ambulance")
-    to_destroy_spawn_list[f"ambulance"] = ambulance
+        constructions_car = spawn_static_car(world=world,location=(-59.7, 126.71006774902344, CARS_Z_POSITION),rotation=(0,200,0),cars_filter="vehicle.carlamotors.european_hgv")
+        to_destroy_spawn_list[f"construction_car"] = constructions_car
+        ambulance = spawn_static_car(world=world,location=(-52.5, 124.9, CARS_Z_POSITION),rotation=(0,270,0),cars_filter="vehicle.ford.ambulance")
+        to_destroy_spawn_list[f"ambulance"] = ambulance
 
-    b_loops = 3
-    for i in range(b_loops):
-        barrier = spawn_barrier(world, (-39.50 - i * 2, 124.2, 0.0), (0, 0, 0))
-        to_destroy_spawn_list[f"turn_barrier{i + 1}/{b_loops}"] = barrier
+        b_loops = 3
+        for i in range(b_loops):
+            barrier = spawn_barrier(world, (-39.50 - i * 2, 124.2, 0.0), (0, 0, 0))
+            to_destroy_spawn_list[f"turn_barrier{i + 1}/{b_loops}"] = barrier
 
-    t_loops = 5
-    x_pos = -35.0
-    for i in range(t_loops):
-        cone = spawn_barrier(world, (x_pos, 130.21006774902344, 0.0), (0, 90, 0),'static.prop.trafficcone01')
-        x_pos = x_pos - 4
-        to_destroy_spawn_list[f"cone{i + 1}/{t_loops}"] = cone
-    c_loops = 2
-    for i in range(c_loops):
-        wsign = spawn_barrier(world, (x_pos,130.21006774902344, 0.0), (0, 270, 0), 'static.prop.warningconstruction')
-        x_pos = x_pos - 4
-        to_destroy_spawn_list[f"wsign{i + 1}/{c_loops}"] = wsign
-    d_loops = 4
+        t_loops = 5
+        x_pos = -35.0
+        for i in range(t_loops):
+            cone = spawn_barrier(world, (x_pos, 130.21006774902344, 0.0), (0, 90, 0),'static.prop.trafficcone01')
+            x_pos = x_pos - 4
+            to_destroy_spawn_list[f"cone{i + 1}/{t_loops}"] = cone
+        c_loops = 2
+        for i in range(c_loops):
+            wsign = spawn_barrier(world, (x_pos,130.21006774902344, 0.0), (0, 270, 0), 'static.prop.warningconstruction')
+            x_pos = x_pos - 4
+            to_destroy_spawn_list[f"wsign{i + 1}/{c_loops}"] = wsign
+        d_loops = 4
 
-    for i in range(d_loops):
-        dirt = spawn_barrier(world, (x_pos, 128.21006774902344 - (i % 2)*2, 0.0), (0, 270, 0), 'static.prop.dirtdebris01')
-        x_pos = x_pos - (1- i % 2) * 4
-        to_destroy_spawn_list[f"cdirt{i + 1}/{d_loops}"] = dirt
+        for i in range(d_loops):
+            dirt = spawn_barrier(world, (x_pos, 128.21006774902344 - (i % 2)*2, 0.0), (0, 270, 0), 'static.prop.dirtdebris01')
+            x_pos = x_pos - (1- i % 2) * 4
+            to_destroy_spawn_list[f"cdirt{i + 1}/{d_loops}"] = dirt
+    elif LESSON_ID == 1:
+        ambulance = spawn_static_car(world=world,location=(26.2, 31, CARS_Z_POSITION),rotation=(0,0,0),cars_filter="vehicle.ford.ambulance")
+        to_destroy_spawn_list[f"ambulance"] = ambulance
+        vendingmachine1 = spawn_barrier(world, (26.2, 35,0.0), (0, 270, 0),'static.prop.vendingmachine')
+        vendingmachine2 = spawn_barrier(world, (26.2, 38,0.0), (0, 270, 0),'static.prop.vendingmachine')
+        to_destroy_spawn_list[f"vendingmachine1"] = vendingmachine1
+        to_destroy_spawn_list[f"vendingmachine2"] = vendingmachine2
 
+def set_up_lesson_weather(world):
+    if LESSON_ID == 0:
+        #morning_weather
+        weather = carla.WeatherParameters(
+            cloudiness=20.0,  # Light clouds
+            precipitation=0.0,  # No rain
+            precipitation_deposits=0.0,  # Dry roads
+            wind_intensity=10.0,  # Light breeze
+            sun_altitude_angle=15.0,  # Morning sun, not directly overhead
+            fog_density=10.0,  # Very light fog for a fresh morning feel
+            fog_distance=100.0,  # High visibility
+            wetness=0.0  # Dry environment
+        )
+    elif LESSON_ID == 1:
+        #rainy_dark_weather
+        weather = carla.WeatherParameters(
+            cloudiness=100.0,  # Full cloud coverage
+            precipitation=80.0,  # Heavy rain
+            precipitation_deposits=80.0,  # Very wet roads
+            wind_intensity=50.0,  # Moderate wind
+            sun_altitude_angle=-20.0,  # Low sun (below the horizon for darkness)
+            fog_density=30.0,  # Moderate fog
+            fog_distance=10.0,  # Short visibility due to fog
+            wetness=80.0  # Very wet environment
+        )
 
-def set_light_state(vehicle, brake_light_on):
+    world.set_weather(weather)
+
+def set_up_lights(vehicle,current_lights=None,is_palyer_car=True):
+    current_lights = carla.VehicleLightState.NONE if current_lights is None else current_lights
+    if LESSON_ID == 0:
+        pass
+    elif LESSON_ID == 1:
+        lights = current_lights | carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
+        vehicle.set_light_state(carla.VehicleLightState(lights))
+
+def set_brake_light_state(vehicle, brake_light_on):
     # Retrieve the current light state
     current_light_state = vehicle.get_light_state()
 
@@ -288,16 +335,16 @@ def set_speed(vehicle, target_speed):
     if current_speed < target_speed:
         control.throttle = min((target_speed - current_speed) / target_speed, 1.0)
         control.brake = 0.0
-        set_light_state(vehicle,brake_light_on=False)
+        set_brake_light_state(vehicle,brake_light_on=False)
     else:
         control.throttle = 0.0
         if target_speed > 0:
             control.brake = min((current_speed - target_speed) / target_speed, 1.0)
-            set_light_state(vehicle,brake_light_on=True)
+            set_brake_light_state(vehicle,brake_light_on=True)
         else:
             # If target_speed is zero, apply full braking or handle as needed
             control.brake = 1.0
-            set_light_state(vehicle,brake_light_on=True)
+            set_brake_light_state(vehicle,brake_light_on=True)
 
 
     vehicle.apply_control(control)
@@ -307,7 +354,14 @@ def init_spawn_active_car(name,world,blueprint,spawn_point):
     to_destroy_spawn_list[name] = car
     return car
 
-
+def get_beyond_car_spawn_point(spawn_points):
+    if LESSON_ID == 0:
+        return spawn_points[BEYOND_CAR_INDEX_DICT[LESSON_ID]]
+    elif LESSON_ID == 1:
+        # Create the location and rotation objects
+        location = carla.Location(x=30.1, y=40, z=CARS_Z_POSITION)
+        rotation = carla.Rotation(pitch=0, yaw=-90, roll=0)
+        return carla.Transform(location, rotation)
 
 #/////////////////////////////////////////////////////////////////
 #/////////////////////////////////////////////////////////////////
@@ -431,7 +485,7 @@ class World(object):
         if not blueprint_list:
             raise ValueError("Couldn't find any blueprints with the specified filters")
         blueprint = random.choice(blueprint_list)
-        beyond_car_blueprint = get_actor_blueprints(self.world,BEYOND_CAR_BLUEPRINT_ID, self._actor_generation)[0]
+        beyond_car_blueprint = get_actor_blueprints(self.world,BEYOND_CAR_BLUEPRINT_ID_DICT[LESSON_ID], self._actor_generation)[0]
         # blueprint = random.choice(blueprint_list)
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('terramechanics'):
@@ -454,6 +508,8 @@ class World(object):
             print('Please add some Vehicle Spawn Point to your UE4 scene.')
             sys.exit(1)
         spawn_points = self.map.get_spawn_points()
+        if PRINT_SPAWN_POINTS:
+            print("spawn_points",[f"x={spawn_points[idx].location.x},y={spawn_points[idx].location.y},idx={idx}" for idx in range(len(spawn_points))])
         # Spawn the player.
         if self.player is not None:
             spawn_point = self.player.get_transform()
@@ -462,9 +518,11 @@ class World(object):
             spawn_point.rotation.pitch = 0.0
             self.destroy()
             #set up environment
-            self.player = init_spawn_active_car("Player_car",self.world, blueprint, spawn_points[SPAWN_POINT_PLAYER_INDEX])
-            self.beyond_car = init_spawn_active_car("Beyond_car",self.world, beyond_car_blueprint, spawn_points[BEYOND_CAR_INDEX])
+            self.player = init_spawn_active_car("Player_car",self.world, blueprint, spawn_points[SPAWN_POINT_PLAYER_INDEX_DICT[LESSON_ID]])
+            self.beyond_car = init_spawn_active_car("Beyond_car",self.world, beyond_car_blueprint, get_beyond_car_spawn_point(spawn_points))
             set_up_lesson_static_environmen(world=self.world)
+            set_up_lesson_weather(self.world)
+            set_up_lights(self.player)
 
             self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
@@ -472,9 +530,11 @@ class World(object):
             print("LOOPING !!")
             spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
             #set up environment
-            self.player = init_spawn_active_car("Player_car",self.world, blueprint, spawn_points[SPAWN_POINT_PLAYER_INDEX])
-            self.beyond_car = init_spawn_active_car("Beyond_car",self.world, beyond_car_blueprint, spawn_points[BEYOND_CAR_INDEX])
+            self.player = init_spawn_active_car("Player_car",self.world, blueprint, spawn_points[SPAWN_POINT_PLAYER_INDEX_DICT[LESSON_ID]])
+            self.beyond_car = init_spawn_active_car("Beyond_car",self.world, beyond_car_blueprint,get_beyond_car_spawn_point(spawn_points))
             set_up_lesson_static_environmen(world=self.world)
+            set_up_lesson_weather(self.world)
+            set_up_lights(self.player)
 
             self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
@@ -547,13 +607,16 @@ class World(object):
         self.camera_manager.index = None
 
     def modify_beyond_car_args(self):
-        velocity = self.player.get_velocity()
-        speed = velocity.length()
-        to_set = speed * 2 if speed <= 20 else 10
-        if self.beyond_car.get_transform().location.x <= -50.0:
-            to_set = 0
-        set_speed(self.beyond_car,to_set)
-
+        if LESSON_ID == 0:
+            velocity = self.player.get_velocity()
+            speed = velocity.length()
+            to_set = speed * 2 if speed <= 20 else 10
+            if self.beyond_car.get_transform().location.x <= -50.0:
+                to_set = 0
+            set_speed(self.beyond_car,to_set)
+        elif LESSON_ID == 1:
+            if self.player.get_transform().location.x > -20.0:
+                set_speed(self.beyond_car, 10000)
     def destroy(self):
         global to_destroy_spawn_list
         if self.radar_sensor is not None:
@@ -593,6 +656,8 @@ class KeyboardControl(object):
             self._lights = carla.VehicleLightState.NONE
             world.player.set_autopilot(self._autopilot_enabled)
             world.player.set_light_state(self._lights)
+            set_up_lights(world.player,self._lights)
+
         elif isinstance(world.player, carla.Walker):
             self._control = carla.WalkerControl()
             self._autopilot_enabled = False
@@ -792,6 +857,7 @@ class KeyboardControl(object):
                 if current_lights != self._lights: # Change the light state only if necessary
                     self._lights = current_lights
                     world.player.set_light_state(carla.VehicleLightState(self._lights))
+                    set_up_lights(world.player, self._lights)
                 # Apply control
                 if not self._ackermann_enabled:
                     world.player.apply_control(self._control)
