@@ -176,7 +176,7 @@ except ImportError:
 #///////////////////////////////////////////////////////////////// OUR FUNCS /////////////////////////////////////////////////////////////////
 #///////////////////////////////////////////////////////////////// OUR FUNCS /////////////////////////////////////////////////////////////////
 
-def show_telemetry():
+def show_telemetry_old():
     # Example telemetry data (can be modified)
 
     if not start_flag:
@@ -247,6 +247,105 @@ def show_telemetry():
     # Start the Tkinter main loop (this opens the pop-up window)
     root.mainloop()
 
+
+def show_telemetry():
+    # Create a Tkinter window
+    root = tk.Tk()
+    root.title("Telemetry Data Visualization")
+
+    # Create a frame for the buttons
+    button_frame = tk.Frame(root)
+    button_frame.pack(side=tk.TOP, fill=tk.X)
+
+    # Create the button click functions
+    def show_collisions():
+        fig, ax = plt.subplots(figsize=(8, 6))
+        collisions_num = 0
+        frames_1 = []
+        collisions = []
+        for el in telemetry["collisions"]:
+            collisions_num += 1
+            frames_1.append(el['frame'])
+            collisions.append(collisions_num)
+        ax.plot(frames_1, collisions, marker='o', linestyle='-', color='b')
+        ax.set_title('#Collisions Graph')
+        ax.set_xlabel('Frame')
+        ax.set_ylabel('#Collisions')
+        ax.grid(True)
+        show_plot(fig)
+
+    def show_speed():
+        fig, ax = plt.subplots(figsize=(8, 6))
+        frames_2 = []
+        speeds = []
+        for el in telemetry["speed"]:
+            frames_2.append(el["frame"])
+            speeds.append(el['curr_speed'])
+        ax.plot(frames_2, speeds, marker='x', linestyle='-', color='r')
+        ax.set_title('Speed over Time')
+        ax.set_xlabel('Frame')
+        ax.set_ylabel('Speed (km/h)')
+        ax.grid(True)
+        show_plot(fig)
+
+
+    def show_table():
+        fig, ax = plt.subplots(figsize=(8, 6))
+        table_data = [["MAX Speed", f"{max_speed : .3f}km/h"],
+                      ["AVG Speed", f"{(sum_speed / samples_num) if samples_num > 0 else 0 : .3f}km/h"]]
+
+        for key in telemetry:
+            if not isinstance(telemetry[key], list):
+                table_data.append([key, telemetry[key]])
+
+        ax.axis('tight')
+        ax.axis('off')
+
+        # Create the table
+        table = ax.table(cellText=table_data, colLabels=['Metric', 'Value'], cellLoc='center', loc='center')
+
+        # Adjust font size of table cells
+        for (i, j), cell in table.get_celld().items():
+            cell.set_fontsize(10)  # Set the font size for each cell
+            cell.set_text_props(fontsize=10)  # Ensure text inside cells gets the correct font size
+
+        # Adjust font size of column labels (headers)
+        for label in table.get_celld().values():
+            if label.get_text() is not None:  # Ensure we are modifying labels
+                label.set_fontsize(10)  # Change font size for the column headers
+
+        # You can also adjust table auto font size behavior
+        table.auto_set_font_size(False)  # Disable auto font size
+        table.set_fontsize(10)  # Set desired font size for table content and headers
+
+        show_plot(fig)
+
+    # Function to display the plot in the window
+    def show_plot(fig):
+        # Clear the current plot and create a new canvas for each plot
+        for widget in canvas_frame.winfo_children():
+            widget.destroy()
+
+        canvas = FigureCanvasTkAgg(fig, master=canvas_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    # Create the buttons
+    button1 = tk.Button(button_frame, text="Collisions Graph", command=show_collisions)
+    button1.pack(side=tk.LEFT, padx=10, pady=10)
+
+    button2 = tk.Button(button_frame, text="Speed Graph", command=show_speed)
+    button2.pack(side=tk.LEFT, padx=10, pady=10)
+
+    button3 = tk.Button(button_frame, text="Table", command=show_table)
+    button3.pack(side=tk.LEFT, padx=10, pady=10)
+
+    # Create a frame for displaying the plot or table
+    canvas_frame = tk.Frame(root)
+    canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Start the Tkinter main loop
+    root.mainloop()
 def update_Speed_info(speed):
     global max_speed, sum_speed, samples_num
     if samples_num == 0 and speed == 0:
@@ -670,7 +769,6 @@ class World(object):
         self._weather_index %= len(self._weather_presets)
         preset = self._weather_presets[self._weather_index]
         self.hud.notification('Weather: %s' % preset[1])
-        telemetry["Weather"] = preset[0]
         self.player.get_world().set_weather(preset[0])
 
     def next_map_layer(self, reverse=False):
@@ -1692,6 +1790,9 @@ def game_loop(args):
 
         hud = HUD(args.width, args.height)
         world = World(sim_world, hud, args)
+        weather_info = world._weather_presets[world._weather_index][0]
+        telemetry["Weather Info"] = f'precipitation : {int(weather_info.precipitation)}%, fog_density: {weather_info.fog_density}%'
+
         controller = KeyboardControl(world, args.autopilot)
 
         if args.sync:

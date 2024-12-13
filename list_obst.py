@@ -176,7 +176,101 @@ def main():
     # List available obstacle blueprints
     list_obstacle_blueprints(client)
 
+# Example telemetry data
+telemetry = {
+    "collisions": [{"frame": 1}, {"frame": 2}, {"frame": 3}],
+    "speed": [{"frame": 1, "curr_speed": 50}, {"frame": 2, "curr_speed": 60}, {"frame": 3, "curr_speed": 70}],
+    "max_speed": 70,
+    "avg_speed": 60,
+    "samples_num": 3
+}
+
+def show_telemetry():
+    # Create a Tkinter window
+    root = tk.Tk()
+    root.title("Telemetry Data Visualization")
+
+    # Create a frame for the buttons
+    button_frame = tk.Frame(root)
+    button_frame.pack(side=tk.TOP, fill=tk.X)
+
+    # Create the button click functions
+    def show_collisions():
+        fig, ax = plt.subplots(figsize=(8, 6))
+        collisions_num = 0
+        frames_1 = []
+        collisions = []
+        for el in telemetry["collisions"]:
+            collisions_num += 1
+            frames_1.append(el['frame'])
+            collisions.append(collisions_num)
+        ax.plot(frames_1, collisions, marker='o', linestyle='-', color='b')
+        ax.set_title('#Collisions Graph')
+        ax.set_xlabel('Frame')
+        ax.set_ylabel('#Collisions')
+        ax.grid(True)
+        show_plot(fig)
+
+    def show_speed():
+        fig, ax = plt.subplots(figsize=(8, 6))
+        frames_2 = []
+        speeds = []
+        for el in telemetry["speed"]:
+            frames_2.append(el["frame"])
+            speeds.append(el['curr_speed'])
+        ax.plot(frames_2, speeds, marker='x', linestyle='-', color='r')
+        ax.set_title('Speed over Time')
+        ax.set_xlabel('Frame')
+        ax.set_ylabel('Speed (km/h)')
+        ax.grid(True)
+        show_plot(fig)
+
+    def show_table():
+        fig, ax = plt.subplots(figsize=(8, 6))
+        table_data = [
+            ["MAX Speed", f"{telemetry['max_speed']:.3f} km/h"],
+            ["AVG Speed", f"{telemetry['avg_speed']:.3f} km/h"]
+        ]
+        for key in telemetry:
+            if not isinstance(telemetry[key], list):
+                table_data.append([key, telemetry[key]])
+
+        ax.axis('tight')
+        ax.axis('off')
+        table = ax.table(cellText=table_data, colLabels=['Metric', 'Value'], cellLoc='center', loc='center')
+        show_plot(fig)
+
+    # Function to display the plot in the window
+    def show_plot(fig):
+        # Clear the current plot and create a new canvas for each plot
+        for widget in canvas_frame.winfo_children():
+            widget.destroy()
+
+        canvas = FigureCanvasTkAgg(fig, master=canvas_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    # Create the buttons
+    button1 = tk.Button(button_frame, text="Collisions Graph", command=show_collisions)
+    button1.pack(side=tk.LEFT, padx=10, pady=10)
+
+    button2 = tk.Button(button_frame, text="Speed Graph", command=show_speed)
+    button2.pack(side=tk.LEFT, padx=10, pady=10)
+
+    button3 = tk.Button(button_frame, text="Table", command=show_table)
+    button3.pack(side=tk.LEFT, padx=10, pady=10)
+
+    # Create a frame for displaying the plot or table
+    canvas_frame = tk.Frame(root)
+    canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Start the Tkinter main loop
+    root.mainloop()
+
+# Call the function to show the telemetry
+
+
 
 if __name__ == '__main__':
     # main()
-    graphs1()
+    show_telemetry()
