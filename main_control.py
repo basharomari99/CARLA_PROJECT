@@ -60,6 +60,9 @@ from __future__ import print_function
 # ==============================================================================
 # -- find carla module ---------------------------------------------------------
 # ==============================================================================
+import tkinter as tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
 
 
 import glob
@@ -95,7 +98,12 @@ BAREL_BLUIPRIT_ID = "static.prop.barrel"
 BEYOND_CAR_BLUEPRINT_ID = "vehicle.chevrolet.impala"
 BEYOND_CAR_BLUEPRINT_ID_DICT = {0:"vehicle.chevrolet.impala",1:"vehicle.bh.crossbike"}
 to_destroy_spawn_list = {}
+telemetry = {"speed": [], "locations": [],"collisions": []}
+max_speed = 0
+sum_speed = 0
+samples_num = 0
 CARS_Z_POSITION = 0.5999999642372131
+start_flag = False
 ##################################
 DEBUG_EN = True
 from carla import ColorConverter as cc
@@ -168,6 +176,96 @@ except ImportError:
 #///////////////////////////////////////////////////////////////// OUR FUNCS /////////////////////////////////////////////////////////////////
 #///////////////////////////////////////////////////////////////// OUR FUNCS /////////////////////////////////////////////////////////////////
 
+def show_telemetry():
+    # Example telemetry data (can be modified)
+
+    if not start_flag:
+        return
+
+    collisions_num = 0
+    frames_1 = []
+    collisions = []
+    for el in telemetry["collisions"]:
+        collisions_num += 1
+        frames_1.append(el['frame'])
+        collisions.append(collisions_num)
+
+    frames_2 = []
+    speeds = []
+    for el in telemetry["speed"]:
+        frames_2.append(el["frame"])
+        speeds.append(el['curr_speed'])
+
+    # Create a Tkinter window
+    root = tk.Tk()
+    root.title("Telemetry Data Visualization")
+
+    # Create a figure and subplots
+    fig, axs = plt.subplots(1, 2, figsize=(15, 6))
+
+
+    # Plot the first graph
+    axs[0].plot(frames_1, collisions, marker='o', linestyle='-', color='b')
+    axs[0].set_title('#Collisions Graph', fontsize=12)
+    axs[0].set_xlabel('Frame', fontsize=10)
+    axs[0].set_ylabel('#Collisions', fontsize=10)
+    axs[0].grid(True)
+
+    # Plot the second graph
+    axs[1].plot(frames_2, speeds, marker='x', linestyle='-', color='r')
+    axs[1].set_title('Speed over Time', fontsize=12)
+    axs[1].set_xlabel('Frame', fontsize=10)
+    axs[1].set_ylabel('Speed (km/h)', fontsize=10)
+    axs[1].grid(True)
+
+    # Create a table below the plots (sample data)
+    table_data = [["MAX Speed",f"{max_speed : .3f}km/h"],["AVG Speed",f"{(sum_speed / samples_num) if samples_num > 0 else 0 : .3f}km/h"]]
+    for key in telemetry:
+        if not isinstance(telemetry[key], list):
+            table_data.append([key, telemetry[key]])
+
+    # Add the table (adjust its position)
+    table = plt.table(cellText=table_data,
+                      colLabels=['Metric', 'Value'],
+                      cellLoc='center',
+                      loc='bottom',
+                      colColours=['#f0f0f0'] * 2,
+                      bbox=[0.2, -0.3, 0.6, 0.2])
+
+    # Adjust the layout
+    plt.tight_layout()
+
+    # Embed the plot into the Tkinter window
+    canvas = FigureCanvasTkAgg(fig, master=root)  # Embed the figure in the Tkinter window
+    canvas.draw()
+
+    # Place the canvas in the Tkinter window
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+
+
+    # Start the Tkinter main loop (this opens the pop-up window)
+    root.mainloop()
+
+def update_Speed_info(speed):
+    global max_speed, sum_speed, samples_num
+    if samples_num == 0 and speed == 0:
+        return
+    samples_num += 1
+    sum_speed += speed
+    if speed > max_speed:
+        max_speed = speed
+
+def reset_telemetry():
+    global telemetry,max_speed,samples_num,sum_speed
+    telemetry = {"speed": [], "locations": [], "collisions": []}
+    max_speed = 0
+    sum_speed = 0
+    samples_num = 0
+
+
+def dist(L1,L2):
+    return math.sqrt((L1[0] - L2[0])**2 + (L1[1] - L2[1])**2)
 def spawn_barrier(world, location, rotation=(0, 0, 0),barrier_type='static.prop.streetbarrier'):
     blueprint_library = world.get_blueprint_library()
     barrier_bp = blueprint_library.find(barrier_type)  # Adjust the blueprint name as needed
@@ -273,6 +371,16 @@ def set_up_lesson_static_environmen(world):
         vendingmachine2 = spawn_barrier(world, (26.2, 38,0.0), (0, 270, 0),'static.prop.vendingmachine')
         to_destroy_spawn_list[f"vendingmachine1"] = vendingmachine1
         to_destroy_spawn_list[f"vendingmachine2"] = vendingmachine2
+
+        barrier1 = spawn_barrier(world, (-48.0, 38.6, 0.0), (0, 0, 0))
+        barrier2 = spawn_barrier(world, (-52.0, 38.6, 0.0), (0, 0, 0))
+        barrier3 = spawn_barrier(world, (25.8, 28.2, 0.0), (0, 90, 0))
+        to_destroy_spawn_list["barrier1"] = barrier1
+        to_destroy_spawn_list["barrier2"] = barrier2
+        to_destroy_spawn_list["barrier3"] = barrier3
+        for i in range(5):
+            to_destroy_spawn_list[f"barrier_for_{i}"] = spawn_barrier(world, (-53.0 + i * 5, 20.8, 0.0), (0, 0, 0))
+
 
 def set_up_lesson_weather(world):
     if LESSON_ID == 0:
@@ -557,10 +665,12 @@ class World(object):
             self.world.wait_for_tick()
 
     def next_weather(self, reverse=False):
+        global telemetry
         self._weather_index += -1 if reverse else 1
         self._weather_index %= len(self._weather_presets)
         preset = self._weather_presets[self._weather_index]
         self.hud.notification('Weather: %s' % preset[1])
+        telemetry["Weather"] = preset[0]
         self.player.get_world().set_weather(preset[0])
 
     def next_map_layer(self, reverse=False):
@@ -615,9 +725,22 @@ class World(object):
                 to_set = 0
             set_speed(self.beyond_car,to_set)
         elif LESSON_ID == 1:
-            if self.player.get_transform().location.x > -20.0:
-                set_speed(self.beyond_car, 10000)
+            velocity = self.player.get_velocity()
+            speed = velocity.length()
+            abs_locXspeed = abs(self.player.get_transform().location.x + 89 ) * speed
+            # print(f"(grepdbg)abs_locXspeed = {abs_locXspeed}")
+
+            if self.beyond_car.get_transform().location.y <= 24.5:
+                set_speed(self.beyond_car, speed * 0)
+            elif abs_locXspeed > 500 :
+                set_speed(self.beyond_car, speed * 5)
+            elif self.player.get_transform().location.x > 10:
+                set_speed(self.beyond_car, 50)
+            else:
+                set_speed(self.beyond_car, 1)
+
     def destroy(self):
+        global telemetry
         global to_destroy_spawn_list
         if self.radar_sensor is not None:
             self.toggle_radar()
@@ -638,6 +761,8 @@ class World(object):
         to_destroy_spawn_list = {}
         self.player = None
         self.beyond_car = None
+        show_telemetry()
+        reset_telemetry()
 
 # ==============================================================================
 # -- KeyboardControl -----------------------------------------------------------
@@ -983,6 +1108,14 @@ class HUD(object):
         max_col = max(1.0, max(collision))
         collision = [x / max_col for x in collision]
         vehicles = world.world.get_actors().filter('vehicle.*')
+        speed = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
+        if (len(telemetry["speed"]) == 0 and speed > 0) or (len(telemetry["speed"]) > 0 and abs(speed - telemetry["speed"][-1]["curr_speed"]) > 3):
+            telemetry["speed"].append({"frame":self.frame,"curr_speed":speed})
+
+        # if len(telemetry["locations"]) == 0 or dist(telemetry["locations"][-1],(t.location.x, t.location.y)):
+        #     telemetry["locations"].append((t.location.x, t.location.y))
+
+        update_Speed_info(speed)
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
             'Client:  % 16.0f FPS' % clock.get_fps(),
@@ -991,7 +1124,7 @@ class HUD(object):
             'Map:     % 20s' % world.map.name.split('/')[-1],
             'Simulation time: % 12s' % datetime.timedelta(seconds=int(self.simulation_time)),
             '',
-            'Speed:   % 15.0f km/h' % (3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)),
+            'Speed:   % 15.0f km/h' % speed,
             u'Compass:% 17.0f\N{DEGREE SIGN} % 2s' % (compass, heading),
             'Accelero: (%5.1f,%5.1f,%5.1f)' % (world.imu_sensor.accelerometer),
             'Gyroscop: (%5.1f,%5.1f,%5.1f)' % (world.imu_sensor.gyroscope),
@@ -999,6 +1132,7 @@ class HUD(object):
             'GNSS:% 24s' % ('(% 2.6f, % 3.6f)' % (world.gnss_sensor.lat, world.gnss_sensor.lon)),
             'Height:  % 18.0f m' % t.location.z,
             '']
+
         if isinstance(c, carla.VehicleControl):
             self._info_text += [
                 ('Throttle:', c.throttle, 0.0, 1.0),
@@ -1158,6 +1292,7 @@ class CollisionSensor(object):
         self.history = []
         self._parent = parent_actor
         self.hud = hud
+        self.prev_collision = None
         world = self._parent.get_world()
         bp = world.get_blueprint_library().find('sensor.other.collision')
         self.sensor = world.spawn_actor(bp, carla.Transform(), attach_to=self._parent)
@@ -1179,6 +1314,12 @@ class CollisionSensor(object):
             return
         actor_type = get_actor_display_name(event.other_actor)
         self.hud.notification('Collision with %r' % actor_type)
+        if f"Collision with {actor_type}" not in telemetry:
+            telemetry[f"Collision with {actor_type}"] = 0
+        telemetry[f"Collision with {actor_type}"] += 1
+        telemetry[f"collisions"].append({"frame": event.frame})
+
+
         impulse = event.normal_impulse
         intensity = math.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
         self.history.append((event.frame, intensity))
@@ -1194,7 +1335,7 @@ class CollisionSensor(object):
 class LaneInvasionSensor(object):
     def __init__(self, parent_actor, hud):
         self.sensor = None
-
+        self.prev_cross = None
         # If the spawn object is not a vehicle, we cannot use the Lane Invasion Sensor
         if parent_actor.type_id.startswith("vehicle."):
             self._parent = parent_actor
@@ -1215,6 +1356,10 @@ class LaneInvasionSensor(object):
         lane_types = set(x.type for x in event.crossed_lane_markings)
         text = ['%r' % str(x).split()[-1] for x in lane_types]
         self.hud.notification('Crossed line %s' % ' and '.join(text))
+        curr_cross = 'Crossed line %s' % ' and '.join(text)
+        if curr_cross not in telemetry:
+            telemetry[curr_cross] = 0
+        telemetry[curr_cross] += 1
 
 
 # ==============================================================================
@@ -1512,6 +1657,8 @@ class CameraManager(object):
 
 
 def game_loop(args):
+    global start_flag
+
     pygame.init()
     pygame.font.init()
     world = None
@@ -1560,6 +1707,7 @@ def game_loop(args):
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock, args.sync):
                 return
+            start_flag = True
             world.modify_beyond_car_args()
             world.tick(clock)
             world.render(display)
