@@ -63,6 +63,7 @@ import time
 import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
+# To import a basic agent
 
 
 import glob
@@ -84,20 +85,24 @@ except IndexError:
 
 import threading
 import carla
+import random
 ############################DEBGUS##################
 PRINT_SPAWN_POINTS = False
 #vehicle.bh.crossbike,"vehicle.chevrolet.impala
 ####################################################
 
 ################METADATA #############
-LESSON_ID = 0
-SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128,1:85}#85
+LESSON_ID = 2
+SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128, 1:85, 2:240}#85
 BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
 PLAYER_BLUEPRINT_ID = "vehicle.audi.tt"
 BAREL_BLUIPRIT_ID = "static.prop.barrel"
 BEYOND_CAR_BLUEPRINT_ID = "vehicle.chevrolet.impala"
-BEYOND_CAR_BLUEPRINT_ID_DICT = {0:"vehicle.chevrolet.impala",1:"vehicle.bh.crossbike"}
+BEYOND_CAR_BLUEPRINT_ID_DICT = {0:"vehicle.chevrolet.impala",1:"vehicle.bh.crossbike",2:"vehicle.mercedes.coupe_2020"}
 to_destroy_spawn_list = {}
+auto_piloted_y_list = {}
+auto_piloted_x_list = {}
+ran_autopilot_x,ran_autopilot_y = False,False
 telemetry = {"speed": [], "locations": [],"collisions": []}
 max_speed = 0
 sum_speed = 0
@@ -263,18 +268,22 @@ class RecordingHandler():
         if world.recording_enabled is False and self.worked == False:
             self.worked = True
             print("grepdbg recording started !!!!!!!!!!")
+            print("grepdbg recording started !!!!!!!!!!")
+            print("grepdbg recording started !!!!!!!!!!")
             client.start_recorder("manual_recording.rec")
             world.recording_enabled = True
 
     def stop_recording(self,client,world):
-        delay = 7 if LESSON_ID == 1 else 3
+        delay = 3 if LESSON_ID == 0 else 7
         if self.worked and world.recording_enabled:
             if self.stop_delay is None:
                 self.stop_delay = time.time()
                 return
-            elif time.time() - self.stop_delay < 7:
+            elif time.time() - self.stop_delay < delay:
                 return
             else:
+                print("grepdbg recording stopped !!!!!!!!!!")
+                print("grepdbg recording stopped !!!!!!!!!!")
                 print("grepdbg recording stopped !!!!!!!!!!")
                 client.stop_recorder()
                 world.recording_enabled = False
@@ -284,9 +293,9 @@ class RecordingHandler():
         speed = velocity.length()
 
         if LESSON_ID == 0:
-            if world.beyond_car.get_transform().location.x <= -1:
+            if world.player.get_transform().location.x <= -1:
                 self.start_recording(client, world)
-            if world.beyond_car.get_transform().location.x <= -50.0 or self.should_stop:
+            if world.player.get_transform().location.x <= -50.0 or self.should_stop:
                 self.should_stop = True
                 self.stop_recording(client, world)
         if LESSON_ID == 1:
@@ -299,8 +308,43 @@ class RecordingHandler():
                 self.should_stop = True
                 self.stop_recording(client,world)
 
+        if LESSON_ID == 2:
+            if world.player.get_transform().location.y > -75.0:
+                self.start_recording(client, world)
+            if world.player.get_transform().location.y >= 30:
+                self.stop_recording(client,world)
+
+
+def destroy_auto_piloted_cars():
+
+    global auto_piloted_y_list,auto_piloted_x_list,ran_autopilot_x,ran_autopilot_y
+    for el in auto_piloted_y_list:
+        print(f"DESTROYING  {el} autopilot off")
+        auto_piloted_y_list[el].destroy()
+
+    for el in auto_piloted_x_list:
+        print(f"DESTROYING  {el} autopilot off")
+        auto_piloted_x_list[el].destroy()
+
+    auto_piloted_y_list = {}
+    auto_piloted_x_list = {}
+
+def disable_auto_pilot_cars():
+    global auto_piloted_y_list,auto_piloted_x_list,ran_autopilot_x,ran_autopilot_y
+    if ran_autopilot_y:
+        for el in auto_piloted_y_list:
+            print(f"setting {el} autopilot off")
+            auto_piloted_y_list[el].set_autopilot(False)
+
+    if ran_autopilot_x:
+        for el in auto_piloted_x_list:
+            print(f"setting {el} autopilot off")
+            auto_piloted_x_list[el].set_autopilot(False)
+
+    ran_autopilot_x, ran_autopilot_y = False, False
 
 def show_telemetry(world,client):
+
     # Create a Tkinter window
     root = tk.Tk()
     root.title("Telemetry Data Visualization")
@@ -383,6 +427,7 @@ def show_telemetry(world,client):
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def start_replaying():
+
         if recording_handler.worked is False:
             return
         print("grepdbg Replaying !!!!!!!!!!")
@@ -398,7 +443,7 @@ def show_telemetry(world,client):
         client.replay_file("manual_recording.rec", world.recording_start, 0, 0)
         world.camera_manager.set_sensor(current_index)
 
-
+    disable_auto_pilot_cars()
 
     # Create the buttons
     button1 = tk.Button(button_frame, text="Collisions Graph", command=show_collisions)
@@ -551,10 +596,59 @@ def set_up_lesson_static_environmen(world):
         to_destroy_spawn_list["barrier3"] = barrier3
         for i in range(5):
             to_destroy_spawn_list[f"barrier_for_{i}"] = spawn_barrier(world, (-53.0 + i * 5, 20.8, 0.0), (0, 0, 0))
+    elif LESSON_ID == 2:
+        pass
 
+def set_up_auto_piloted_cars(world):
+    global auto_piloted_y_list,to_destroy_spawn_list,auto_piloted_x_list,ran_autopilot_x,ran_autopilot_y
+
+    if not LESSON_ID == 2:
+        return
+
+    loops = 7
+    y_pos = -110
+    x_pos = -4.7
+    allocated_auto_pilot_cars = []
+    for i in range(loops):
+        autopiloted_car = None
+        j = 10
+        while autopiloted_car is None and j > 0:
+            autopiloted_car = spawn_static_car(world, (x_pos, y_pos, CARS_Z_POSITION),(0, 90, 0))
+            if autopiloted_car is not None:
+                allocated_auto_pilot_cars.append(autopiloted_car)
+                # calculating created car length
+                bounding_box = autopiloted_car.bounding_box
+                car_length = bounding_box.extent.x * 2
+                y_pos = (y_pos + car_length + 3)
+                x_pos -= 0.2
+            j -= 1
+        if y_pos >= -50:
+            break
+    for i in range(len(allocated_auto_pilot_cars)):
+        auto_piloted_y_list[f"auto_pilot_y_{i + 1}/{len(allocated_auto_pilot_cars)}"] = allocated_auto_pilot_cars[i]
+
+    loops = 5
+    x_pos = -65.3
+    allocated_static_cars = []
+    for i in range(loops):
+        static_car = None
+        j = 10
+        while static_car is None and j > 0:
+            static_car = spawn_static_car(world, (x_pos, 0.6, CARS_Z_POSITION),(0,0,0))
+            if static_car is not None:
+                allocated_static_cars.append(static_car)
+                # calculating created car length
+                bounding_box = static_car.bounding_box
+                car_length = bounding_box.extent.x * 2
+                x_pos = (x_pos + car_length + 2)
+            j -= 1
+        if x_pos >= -38:
+            break
+    for i in range(len(allocated_static_cars)):
+        auto_piloted_x_list[f"auto_piloted_x_{i + 1}/{len(allocated_static_cars)}"] = allocated_static_cars[i]
 
 def set_up_lesson_weather(world):
-    if LESSON_ID == 0:
+    if LESSON_ID == 0 or LESSON_ID == 2:
         #morning_weather
         weather = carla.WeatherParameters(
             cloudiness=20.0,  # Light clouds
@@ -642,6 +736,12 @@ def get_beyond_car_spawn_point(spawn_points):
         rotation = carla.Rotation(pitch=0, yaw=-90, roll=0)
         return carla.Transform(location, rotation)
 
+    elif LESSON_ID == 2:#todo fixme
+        # Create the location and rotation objects
+        location = carla.Location(x=-4.8, y=-118, z=CARS_Z_POSITION)
+        rotation = carla.Rotation(pitch=0, yaw=90, roll=0)
+        return carla.Transform(location, rotation)
+
 #/////////////////////////////////////////////////////////////////
 #/////////////////////////////////////////////////////////////////
 #/////////////////////////////////////////////////////////////////
@@ -696,6 +796,8 @@ def get_actor_blueprints(world, filter, generation):
     except:
         print("   Warning! Actor Generation is not valid. No actor will be spawned.")
         return []
+
+
 
 
 # ==============================================================================
@@ -799,7 +901,10 @@ class World(object):
             #set up environment
             self.player = init_spawn_active_car("Player_car",self.world, blueprint, spawn_points[SPAWN_POINT_PLAYER_INDEX_DICT[LESSON_ID]])
             self.beyond_car = init_spawn_active_car("Beyond_car",self.world, beyond_car_blueprint, get_beyond_car_spawn_point(spawn_points))
+
+            # set up lesson env
             set_up_lesson_static_environmen(world=self.world)
+            set_up_auto_piloted_cars(world=self.world)
             set_up_lesson_weather(self.world)
             set_up_lights(self.player)
 
@@ -811,7 +916,10 @@ class World(object):
             #set up environment
             self.player = init_spawn_active_car("Player_car",self.world, blueprint, spawn_points[SPAWN_POINT_PLAYER_INDEX_DICT[LESSON_ID]])
             self.beyond_car = init_spawn_active_car("Beyond_car",self.world, beyond_car_blueprint,get_beyond_car_spawn_point(spawn_points))
+
+            #set up lesson env
             set_up_lesson_static_environmen(world=self.world)
+            set_up_auto_piloted_cars(world=self.world)
             set_up_lesson_weather(self.world)
             set_up_lights(self.player)
 
@@ -887,8 +995,8 @@ class World(object):
         self.camera_manager.index = None
 
     def modify_beyond_car_args(self):
-
-        # print(f"grepdbg_steer (x,y) = ({self.player.get_transform().location.x},{self.player.get_transform().location.y}) steer {self.beyond_car.get_control().steer}")
+        global auto_piloted_y_list,auto_piloted_x_list,ran_autopilot_x,ran_autopilot_y
+        # print(f"grepdbg_steer (x,y) = ({self.player.get_transform().location.x},{self.player.get_transform().location.y}) steer {self.player.get_control().steer}")
 
         if LESSON_ID == 0:
             velocity = self.player.get_velocity()
@@ -911,11 +1019,31 @@ class World(object):
                 set_speed(self.beyond_car, 50)
             else:
                 set_speed(self.beyond_car, 1)
+        elif LESSON_ID == 2:
 
+            goal_location = carla.Location(x=215.6, y=-9.9, z=0)  # Set the goal coordinates (change as needed)
+            # Get the map and find the closest waypoint to the goal location
+            carla_map = self.map
+            goal_waypoint = carla_map.get_waypoint(goal_location)
+
+            velocity = self.player.get_velocity()
+            speed = velocity.length()
+            if ran_autopilot_y is False and speed > 2:
+                ran_autopilot_y = True
+                for car in auto_piloted_y_list:
+                    print(f"setting {car} to be autopiloted")
+                    auto_piloted_y_list[car].set_autopilot(True)
+
+            if ran_autopilot_x is False and self.player.get_transform().location.y >= -75.0:
+                ran_autopilot_x = True
+                for car in auto_piloted_x_list:
+                    print(f"setting {car} to be autopiloted")
+                    auto_piloted_x_list[car].set_autopilot(True)
 
 
     def destroy(self):
         global telemetry
+        global auto_piloted_y_list, auto_piloted_x_list, ran_autopilot_x, ran_autopilot_y
         global to_destroy_spawn_list
         if self.radar_sensor is not None:
             self.toggle_radar()
@@ -925,6 +1053,7 @@ class World(object):
             self.lane_invasion_sensor.sensor,
             self.gnss_sensor.sensor,
             self.imu_sensor.sensor]
+        disable_auto_pilot_cars()
         for sensor in sensors:
             if sensor is not None:
                 sensor.stop()
@@ -933,7 +1062,12 @@ class World(object):
             if to_destroy_spawn_list[key] is not None:
                 print(f"destroying an obj, name: {key}  typeid = {to_destroy_spawn_list[key].type_id}")
                 to_destroy_spawn_list[key].destroy()
+        destroy_auto_piloted_cars()
+
         to_destroy_spawn_list = {}
+
+
+
         self.player = None
         self.beyond_car = None
         reset_telemetry()
@@ -1846,6 +1980,11 @@ def game_loop(args):
     try:
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
+        if not (LESSON_ID == 0 or LESSON_ID == 1):
+            client.load_world("Town03")#Town10HD
+        else:
+            client.load_world("Town10HD_Opt")
+            # client.load_world("Town10HD_Opt")
 
         sim_world = client.get_world()
         if args.sync:
@@ -1969,6 +2108,9 @@ def main():
         '--sync',
         action='store_true',
         help='Activate synchronous mode execution')
+
+
+
     args = argparser.parse_args()
 
     args.width, args.height = [int(x) for x in args.res.split('x')]

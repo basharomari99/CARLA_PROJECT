@@ -168,6 +168,21 @@ def graphs1():
     root.mainloop()
 
 
+def cars_list():
+    # Assuming you already have a CARLA client and world object
+    client = carla.Client('localhost', 2000)
+    world = client.get_world()
+
+    # Get the blueprint library
+    blueprint_library = world.get_blueprint_library()
+
+    # Filter for vehicle blueprints
+    vehicle_blueprints = blueprint_library.filter('vehicle')
+
+    # Print the names of all available vehicles
+    for vehicle in vehicle_blueprints:
+        print(vehicle.id)
+
 def main():
     # Connect to the CARLA server
     client = carla.Client('localhost', 2000)  # Adjust the host and port if needed
@@ -175,6 +190,11 @@ def main():
 
     # List available obstacle blueprints
     list_obstacle_blueprints(client)
+
+    available_maps = client.get_available_maps()
+
+    # Print available maps
+    print("Available maps:", available_maps)
 
 # Example telemetry data
 telemetry = {
@@ -272,5 +292,5 @@ def show_telemetry():
 
 
 if __name__ == '__main__':
-    # main()
-    show_telemetry()
+    cars_list()
+    # show_telemetry()
