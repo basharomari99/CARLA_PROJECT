@@ -55,7 +55,7 @@ Use ARROWS or WASD keys for control.
 """
 
 from __future__ import print_function
-
+import time
 
 # ==============================================================================
 # -- find carla module ---------------------------------------------------------
@@ -82,7 +82,7 @@ except IndexError:
 # -- imports -------------------------------------------------------------------
 # ==============================================================================
 
-
+import threading
 import carla
 ############################DEBGUS##################
 PRINT_SPAWN_POINTS = False
@@ -90,7 +90,7 @@ PRINT_SPAWN_POINTS = False
 ####################################################
 
 ################METADATA #############
-LESSON_ID = 1
+LESSON_ID = 0
 SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128,1:85}#85
 BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
 PLAYER_BLUEPRINT_ID = "vehicle.audi.tt"
@@ -248,7 +248,59 @@ def show_telemetry_old():
     root.mainloop()
 
 
-def show_telemetry():
+class RecordingHandler():
+    def __init__(self):
+        self.worked = False
+        self.stop_delay = None
+        self.should_stop = False
+
+    def restart(self):
+        self.worked = False
+        self.stop_delay = None
+        self.should_stop = False
+
+    def start_recording(self,client,world):
+        if world.recording_enabled is False and self.worked == False:
+            self.worked = True
+            print("grepdbg recording started !!!!!!!!!!")
+            client.start_recorder("manual_recording.rec")
+            world.recording_enabled = True
+
+    def stop_recording(self,client,world):
+        delay = 7 if LESSON_ID == 1 else 3
+        if self.worked and world.recording_enabled:
+            if self.stop_delay is None:
+                self.stop_delay = time.time()
+                return
+            elif time.time() - self.stop_delay < 7:
+                return
+            else:
+                print("grepdbg recording stopped !!!!!!!!!!")
+                client.stop_recorder()
+                world.recording_enabled = False
+
+    def handle_recording(self,client,world):
+        velocity = world.player.get_velocity()
+        speed = velocity.length()
+
+        if LESSON_ID == 0:
+            if world.beyond_car.get_transform().location.x <= -1:
+                self.start_recording(client, world)
+            if world.beyond_car.get_transform().location.x <= -50.0 or self.should_stop:
+                self.should_stop = True
+                self.stop_recording(client, world)
+        if LESSON_ID == 1:
+            abs_locXspeed = abs(world.player.get_transform().location.x + 89 ) * speed
+
+            if abs_locXspeed > 500 or world.player.get_transform().location.x > 10:
+                self.start_recording(client,world)
+
+            if world.player.get_transform().location.x >= 33.5 or self.should_stop:
+                self.should_stop = True
+                self.stop_recording(client,world)
+
+
+def show_telemetry(world,client):
     # Create a Tkinter window
     root = tk.Tk()
     root.title("Telemetry Data Visualization")
@@ -330,6 +382,24 @@ def show_telemetry():
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
+    def start_replaying():
+        if recording_handler.worked is False:
+            return
+        print("grepdbg Replaying !!!!!!!!!!")
+        # stop recorder
+        client.stop_recorder()
+        world.recording_enabled = False
+        # work around to fix camera at start of replaying
+        current_index = world.camera_manager.index
+        world.destroy_sensors()
+
+        world.hud.notification("Replaying Driving lesson !")
+        # replayer
+        client.replay_file("manual_recording.rec", world.recording_start, 0, 0)
+        world.camera_manager.set_sensor(current_index)
+
+
+
     # Create the buttons
     button1 = tk.Button(button_frame, text="Collisions Graph", command=show_collisions)
     button1.pack(side=tk.LEFT, padx=10, pady=10)
@@ -344,6 +414,8 @@ def show_telemetry():
     canvas_frame = tk.Frame(root)
     canvas_frame.pack(fill=tk.BOTH, expand=True)
 
+    start_replaying_b = tk.Button(button_frame, text="start Replaying", command=start_replaying)
+    start_replaying_b.pack(side=tk.LEFT, padx=10, pady=10)
     # Start the Tkinter main loop
     root.mainloop()
 def update_Speed_info(speed):
@@ -815,6 +887,9 @@ class World(object):
         self.camera_manager.index = None
 
     def modify_beyond_car_args(self):
+
+        # print(f"grepdbg_steer (x,y) = ({self.player.get_transform().location.x},{self.player.get_transform().location.y}) steer {self.beyond_car.get_control().steer}")
+
         if LESSON_ID == 0:
             velocity = self.player.get_velocity()
             speed = velocity.length()
@@ -836,6 +911,8 @@ class World(object):
                 set_speed(self.beyond_car, 50)
             else:
                 set_speed(self.beyond_car, 1)
+
+
 
     def destroy(self):
         global telemetry
@@ -859,8 +936,8 @@ class World(object):
         to_destroy_spawn_list = {}
         self.player = None
         self.beyond_car = None
-        show_telemetry()
         reset_telemetry()
+        recording_handler.restart()
 
 # ==============================================================================
 # -- KeyboardControl -----------------------------------------------------------
@@ -900,6 +977,7 @@ class KeyboardControl(object):
                 if self._is_quit_shortcut(event.key):
                     return True
                 elif event.key == K_BACKSPACE:
+                    print("grepdbg K_BACKSPACE !!!!!!!!!!!!!!!")
                     if self._autopilot_enabled:
                         world.player.set_autopilot(False)
                         world.restart()
@@ -952,17 +1030,20 @@ class KeyboardControl(object):
                     except Exception:
                         pass
                 elif event.key == K_t:
-                    if world.show_vehicle_telemetry:
-                        world.player.show_debug_telemetry(False)
-                        world.show_vehicle_telemetry = False
-                        world.hud.notification("Disabled Vehicle Telemetry")
-                    else:
-                        try:
-                            world.player.show_debug_telemetry(True)
-                            world.show_vehicle_telemetry = True
-                            world.hud.notification("Enabled Vehicle Telemetry")
-                        except Exception:
-                            pass
+                    tk_thread = threading.Thread(target=show_telemetry, args=(world,client,))
+                    tk_thread.daemon = True  # Ensure Tkinter window closes when the program exits
+                    tk_thread.start()
+                    # if world.show_vehicle_telemetry:
+                    #     world.player.show_debug_telemetry(False)
+                    #     world.show_vehicle_telemetry = False
+                    #     world.hud.notification("Disabled Vehicle Telemetry")
+                    # else:
+                    #     try:
+                    #         world.player.show_debug_telemetry(True)
+                    #         world.show_vehicle_telemetry = True
+                    #         world.hud.notification("Enabled Vehicle Telemetry")
+                    #     except Exception:
+                    #         pass
                 elif event.key > K_0 and event.key <= K_9:
                     index_ctrl = 0
                     if pygame.key.get_mods() & KMOD_CTRL:
@@ -1810,13 +1891,14 @@ def game_loop(args):
                 return
             start_flag = True
             world.modify_beyond_car_args()
+            recording_handler.handle_recording(client,world)
             world.tick(clock)
             world.render(display)
             pygame.display.flip()
 
 
     finally:
-
+        print("grepdbg FINALLY !!!!!!!!!!!!!!!")
         if original_settings:
             sim_world.apply_settings(original_settings)
 
@@ -1907,5 +1989,5 @@ def main():
 
 
 if __name__ == '__main__':
-
+    recording_handler = RecordingHandler()
     main()
