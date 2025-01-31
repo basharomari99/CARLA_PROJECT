@@ -100,7 +100,7 @@ PRINT_SPAWN_POINTS = False
 ####################################################
 
 ################METADATA #############
-LESSON_ID = 1
+LESSON_ID = 0
 traffic_manager = None
 SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128, 1:85, 2:240}#85
 BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
@@ -1263,6 +1263,9 @@ class KeyboardControl(object):
         else:  # Remove the Reverse flag
             current_lights &= ~carla.VehicleLightState.Reverse
 
+        if LESSON_ID == 1:
+            current_lights |= carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
+
         self._lights = current_lights
 
 
@@ -1329,6 +1332,9 @@ class KeyboardControl(object):
                     else:
                         current_lights ^= carla.VehicleLightState.LeftBlinker
                         current_lights &= ~carla.VehicleLightState.RightBlinker
+
+                if LESSON_ID == 1:
+                    current_lights |= carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
 
                 if current_lights != self._lights:
                     self._lights = current_lights
