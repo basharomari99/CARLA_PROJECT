@@ -64,7 +64,15 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 # To import a basic agent
+import sys
 
+if sys.version_info >= (3, 0):
+
+    from configparser import ConfigParser
+
+else:
+
+    from ConfigParser import RawConfigParser as ConfigParser
 
 import glob
 import os
@@ -92,7 +100,7 @@ PRINT_SPAWN_POINTS = False
 ####################################################
 
 ################METADATA #############
-LESSON_ID = 2
+LESSON_ID = 1
 SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128, 1:85, 2:240}#85
 BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
 PLAYER_BLUEPRINT_ID = "vehicle.audi.tt"
@@ -1101,12 +1109,163 @@ class KeyboardControl(object):
         self._steer_cache = 0.0
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
+        # initialize steering wheel
+        pygame.joystick.init()
+
+        joystick_count = pygame.joystick.get_count()
+        if joystick_count > 1:
+            raise ValueError("Please Connect Just One Joystick")
+
+        self._joystick = pygame.joystick.Joystick(0)
+        self._joystick.init()
+
+        self._parser = ConfigParser()
+        self._parser.read('wheel_config.ini')
+
+        # To get a list of sections:
+        sections = self._parser.sections()
+        print("sections", sections,f"joystick count : {joystick_count}")
+
+        self._parser.add_section('Joystick')
+        self._parser.set('Joystick', 'steering_wheel', '0')
+        self._parser.set('Joystick', 'throttle', '1')
+        self._parser.set('Joystick', 'brake', '2')
+        self._parser.set('Joystick', 'reverse', '3')
+        self._parser.set('Joystick', 'handbrake', '4')
+
+        # Now you can access the options just like before
+        self._steer_idx = int(self._parser.get('Joystick', 'steering_wheel'))
+        self._throttle_idx = int(self._parser.get('Joystick', 'throttle'))
+        self._brake_idx = int(self._parser.get('Joystick', 'brake'))
+        self._reverse_idx = int(self._parser.get('Joystick', 'reverse'))
+        self._handbrake_idx = int(self._parser.get('Joystick', 'handbrake'))
+
+    def _parse_vehicle_keys(self, keys, milliseconds):
+        self._control.throttle = 1.0 if keys[K_UP] or keys[K_w] else 0.0
+        steer_increment = 5e-4 * milliseconds
+        if keys[K_LEFT] or keys[K_a]:
+            self._steer_cache -= steer_increment
+        elif keys[K_RIGHT] or keys[K_d]:
+            self._steer_cache += steer_increment
+        else:
+            self._steer_cache = 0.0
+        self._steer_cache = min(0.7, max(-0.7, self._steer_cache))
+        self._control.steer = round(self._steer_cache, 1)
+        self._control.brake = 1.0 if keys[K_DOWN] or keys[K_s] else 0.0
+        self._control.hand_brake = keys[K_SPACE]
+
+    def _parse_vehicle_wheel(self):
+        numAxes = self._joystick.get_numaxes()
+        jsInputs = [float(self._joystick.get_axis(i)) for i in range(numAxes)]
+        # print (jsInputs)
+        jsButtons = [float(self._joystick.get_button(i)) for i in
+                     range(self._joystick.get_numbuttons())]
+
+        # Custom function to map range of inputs [1, -1] to outputs [0, 1] i.e 1 from inputs means nothing is pressed
+        # For the steering, it seems fine as it is
+        K1 = 1.0  # 0.55
+        steerCmd = K1 * math.tan(1.1 * jsInputs[self._steer_idx])
+
+        K2 = 1.6  # 1.6
+        throttleCmd = K2 + (2.05 * math.log10(
+            -0.7 * jsInputs[self._throttle_idx] + 1.4) - 1.2) / 0.92
+        if throttleCmd <= 0:
+            throttleCmd = 0
+        elif throttleCmd > 1:
+            throttleCmd = 1
+
+        brakeCmd = 1.6 + (2.05 * math.log10(
+            -0.7 * jsInputs[self._brake_idx] + 1.4) - 1.2) / 0.92
+        if brakeCmd <= 0:
+            brakeCmd = 0
+        elif brakeCmd > 1:
+            brakeCmd = 1
+
+        self._control.steer = steerCmd
+        self._control.brake = brakeCmd
+        self._control.throttle = throttleCmd
+        current_lights = self._lights
+        if self._control.brake:
+            current_lights |= carla.VehicleLightState.Brake
+        else:
+            current_lights &= ~carla.VehicleLightState.Brake
+
+        if self._control.reverse:
+            current_lights |= carla.VehicleLightState.Reverse
+        else:  # Remove the Reverse flag
+            current_lights &= ~carla.VehicleLightState.Reverse
+
+        self._lights = current_lights
+
+
+        # toggle = jsButtons[self._reverse_idx]
+
+        self._control.hand_brake = bool(jsButtons[self._handbrake_idx])
+
+    def _parse_walker_keys(self, keys, milliseconds):
+        self._control.speed = 0.0
+        if keys[K_DOWN] or keys[K_s]:
+            self._control.speed = 0.0
+        if keys[K_LEFT] or keys[K_a]:
+            self._control.speed = .01
+            self._rotation.yaw -= 0.08 * milliseconds
+        if keys[K_RIGHT] or keys[K_d]:
+            self._control.speed = .01
+            self._rotation.yaw += 0.08 * milliseconds
+        if keys[K_UP] or keys[K_w]:
+            self._control.speed = 5.556 if pygame.key.get_mods() & KMOD_SHIFT else 2.778
+        self._control.jump = keys[K_SPACE]
+        self._rotation.yaw = round(self._rotation.yaw, 1)
+        self._control.direction = self._rotation.get_forward_vector()
+
+    @staticmethod
+    def _is_quit_shortcut(key):
+        return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
+
     def parse_events(self, client, world, clock, sync_mode):
         if isinstance(self._control, carla.VehicleControl):
             current_lights = self._lights
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
+
+            elif event.type == pygame.JOYBUTTONDOWN:
+                if DEBUG_EN : print(f"event buttom : {event.button}")
+                if event.button == 0:
+                    world.restart()
+                elif event.button == 1:
+                    tk_thread = threading.Thread(target=show_telemetry, args=(world, client,))
+                    tk_thread.daemon = True  # Ensure Tkinter window closes when the program exits
+                    tk_thread.start()
+                elif event.button == 2:
+                    world.camera_manager.toggle_camera()
+                elif event.button == 3:
+                    self._control.gear = 1 if self._control.reverse else -1
+                elif event.button == self._reverse_idx:
+                    self._control.gear = 1 if self._control.reverse else -1
+                elif event.button == 23:
+                    world.camera_manager.next_sensor()
+
+
+                if event.button == 4:
+                    blinker_is_on = current_lights & carla.VehicleLightState.RightBlinker
+                    if blinker_is_on:
+                        current_lights &= ~carla.VehicleLightState.RightBlinker
+                    else:
+                        current_lights ^= carla.VehicleLightState.RightBlinker
+                        current_lights &= ~carla.VehicleLightState.LeftBlinker
+                elif event.button == 5:
+                    blinker_is_on = current_lights & carla.VehicleLightState.LeftBlinker
+                    if blinker_is_on:
+                        current_lights &= ~carla.VehicleLightState.LeftBlinker
+                    else:
+                        current_lights ^= carla.VehicleLightState.LeftBlinker
+                        current_lights &= ~carla.VehicleLightState.RightBlinker
+
+                if current_lights != self._lights:
+                    self._lights = current_lights
+                    world.player.set_light_state(carla.VehicleLightState(self._lights))
+
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
                     return True
@@ -1279,96 +1438,19 @@ class KeyboardControl(object):
                     elif event.key == K_x:
                         current_lights ^= carla.VehicleLightState.RightBlinker
 
-        if not self._autopilot_enabled:
-            if isinstance(self._control, carla.VehicleControl):
-                self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
-                self._control.reverse = self._control.gear < 0
-                # Set automatic control-related vehicle lights
-                if self._control.brake:
-                    current_lights |= carla.VehicleLightState.Brake
-                else: # Remove the Brake flag
-                    current_lights &= ~carla.VehicleLightState.Brake
-                if self._control.reverse:
-                    current_lights |= carla.VehicleLightState.Reverse
-                else: # Remove the Reverse flag
-                    current_lights &= ~carla.VehicleLightState.Reverse
-                if current_lights != self._lights: # Change the light state only if necessary
-                    self._lights = current_lights
-                    world.player.set_light_state(carla.VehicleLightState(self._lights))
-                    set_up_lights(world.player, self._lights)
-                # Apply control
-                if not self._ackermann_enabled:
-                    world.player.apply_control(self._control)
-                else:
-                    world.player.apply_ackermann_control(self._ackermann_control)
-                    # Update control to the last one applied by the ackermann controller.
-                    self._control = world.player.get_control()
-                    # Update hud with the newest ackermann control
-                    world.hud.update_ackermann_control(self._ackermann_control)
-
-            elif isinstance(self._control, carla.WalkerControl):
-                self._parse_walker_keys(pygame.key.get_pressed(), clock.get_time(), world)
+            if not self._autopilot_enabled:
+                if isinstance(self._control, carla.VehicleControl):
+                    current_lights = self._lights
+                    self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
+                    self._parse_vehicle_wheel()
+                    self._control.reverse = self._control.gear < 0
+                elif isinstance(self._control, carla.WalkerControl):
+                    self._parse_walker_keys(pygame.key.get_pressed(), clock.get_time())
                 world.player.apply_control(self._control)
+                if self._lights != current_lights:
+                    world.player.set_light_state(carla.VehicleLightState(self._lights))
 
-    def _parse_vehicle_keys(self, keys, milliseconds):
-        if keys[K_UP] or keys[K_w]:
-            if not self._ackermann_enabled:
-                self._control.throttle = min(self._control.throttle + 0.1, 1.00)
-            else:
-                self._ackermann_control.speed += round(milliseconds * 0.005, 2) * self._ackermann_reverse
-        else:
-            if not self._ackermann_enabled:
-                self._control.throttle = 0.0
 
-        if keys[K_DOWN] or keys[K_s]:
-            if not self._ackermann_enabled:
-                self._control.brake = min(self._control.brake + 0.2, 1)
-            else:
-                self._ackermann_control.speed -= min(abs(self._ackermann_control.speed), round(milliseconds * 0.005, 2)) * self._ackermann_reverse
-                self._ackermann_control.speed = max(0, abs(self._ackermann_control.speed)) * self._ackermann_reverse
-        else:
-            if not self._ackermann_enabled:
-                self._control.brake = 0
-
-        steer_increment = 5e-4 * milliseconds
-        if keys[K_LEFT] or keys[K_a]:
-            if self._steer_cache > 0:
-                self._steer_cache = 0
-            else:
-                self._steer_cache -= steer_increment
-        elif keys[K_RIGHT] or keys[K_d]:
-            if self._steer_cache < 0:
-                self._steer_cache = 0
-            else:
-                self._steer_cache += steer_increment
-        else:
-            self._steer_cache = 0.0
-        self._steer_cache = min(0.7, max(-0.7, self._steer_cache))
-        if not self._ackermann_enabled:
-            self._control.steer = round(self._steer_cache, 1)
-            self._control.hand_brake = keys[K_SPACE]
-        else:
-            self._ackermann_control.steer = round(self._steer_cache, 1)
-
-    def _parse_walker_keys(self, keys, milliseconds, world):
-        self._control.speed = 0.0
-        if keys[K_DOWN] or keys[K_s]:
-            self._control.speed = 0.0
-        if keys[K_LEFT] or keys[K_a]:
-            self._control.speed = .01
-            self._rotation.yaw -= 0.08 * milliseconds
-        if keys[K_RIGHT] or keys[K_d]:
-            self._control.speed = .01
-            self._rotation.yaw += 0.08 * milliseconds
-        if keys[K_UP] or keys[K_w]:
-            self._control.speed = world.player_max_speed_fast if pygame.key.get_mods() & KMOD_SHIFT else world.player_max_speed
-        self._control.jump = keys[K_SPACE]
-        self._rotation.yaw = round(self._rotation.yaw, 1)
-        self._control.direction = self._rotation.get_forward_vector()
-
-    @staticmethod
-    def _is_quit_shortcut(key):
-        return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
 # ==============================================================================
@@ -1968,7 +2050,7 @@ class CameraManager(object):
 # -- game_loop() ---------------------------------------------------------------
 # ==============================================================================
 
-
+import inputs
 def game_loop(args):
     global start_flag
 
