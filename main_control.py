@@ -101,6 +101,7 @@ PRINT_SPAWN_POINTS = False
 
 ################METADATA #############
 LESSON_ID = 1
+traffic_manager = None
 SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128, 1:85, 2:240}#85
 BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
 PLAYER_BLUEPRINT_ID = "vehicle.audi.tt"
@@ -361,8 +362,14 @@ def show_telemetry(world,client):
     button_frame = tk.Frame(root)
     button_frame.pack(side=tk.TOP, fill=tk.X)
 
+    def clear_canvas():
+        """Clears the canvas_frame before displaying new content."""
+        for widget in canvas_frame.winfo_children():
+            widget.destroy()
+
     # Create the button click functions
     def show_collisions():
+        clear_canvas()
         fig, ax = plt.subplots(figsize=(8, 6))
         collisions_num = 0
         frames_1 = []
@@ -379,6 +386,7 @@ def show_telemetry(world,client):
         show_plot(fig)
 
     def show_speed():
+        clear_canvas()
         fig, ax = plt.subplots(figsize=(8, 6))
         frames_2 = []
         speeds = []
@@ -394,6 +402,7 @@ def show_telemetry(world,client):
 
 
     def show_table():
+        clear_canvas()
         fig, ax = plt.subplots(figsize=(8, 6))
         table_data = [["MAX Speed", f"{max_speed : .3f}km/h"],
                       ["AVG Speed", f"{(sum_speed / samples_num) if samples_num > 0 else 0 : .3f}km/h"]]
@@ -426,6 +435,7 @@ def show_telemetry(world,client):
 
     # Function to display the plot in the window
     def show_plot(fig):
+        clear_canvas()
         # Clear the current plot and create a new canvas for each plot
         for widget in canvas_frame.winfo_children():
             widget.destroy()
@@ -435,7 +445,7 @@ def show_telemetry(world,client):
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def start_replaying():
-
+        clear_canvas()
         if recording_handler.worked is False:
             return
         print("grepdbg Replaying !!!!!!!!!!")
@@ -451,6 +461,50 @@ def show_telemetry(world,client):
         client.replay_file("manual_recording.rec", world.recording_start, 0, 0)
         world.camera_manager.set_sensor(current_index)
 
+    def show_description():
+        clear_canvas()
+        if LESSON_ID == 0:
+            description_label = tk.Label(canvas_frame, text=(
+            "✴ Lesson 1: Maintaining a Safe Following Distance\n\n"
+            "✴ What was tested?\n"
+            "✦ In this lesson, you encountered a car driving ahead of you.At one point, it suddenly performed an emergency brake.\n\n"
+            "✴ What could have happened?\n"
+            "✦ If you maintained a safe following distance, you would have had enough time to react and brake smoothly, avoiding a collision.This would have ensured a safe and controlled driving experience.\n"
+            "✦ If you followed too closely, there was a risk of not stopping in time, which could have resulted in a collision with the vehicle ahead.\n"
+            "\n✴ Key takeaway:\n"
+            "✦ To ensure safety, always keep a safe distance from the vehicle in front.The three-second rule helps maintain proper spacing, and in poor weather or high-speed situations, an even greater distance is recommended.\n"
+            ), font=("Arial", 12), wraplength=700, justify="left")
+            description_label.pack(pady=20, padx=20)
+
+        if LESSON_ID == 1:
+            description_label = tk.Label(canvas_frame, text=(
+            "✴ Lesson 2: Driving Safely in Poor Weather Conditions\n\n"
+            "✴ What was tested?\n"
+            "✦ You were driving in rainy and foggy weather conditions when a cyclist unexpectedly emerged from a blind spot onto the street.\n\n"
+            "✴ What could have happened?\n"
+            "✦ If you were driving cautiously, maintaining a controlled speed, and staying attentive, you would have had enough time to react and safely slow down or stop, avoiding any dangerous situation.\n"
+            "✦ If you were driving too fast or not fully focused on potential hazards, you might not have been able to react in time, increasing the risk of a collision.\n"
+            "\n✴ Key takeaway:\n"
+            "✦ In poor weather conditions, visibility is reduced, and unexpected obstacles may appear suddenly. Driving at a safe speed, staying alert, and anticipating possible hazards from blind spots can significantly reduce risks and ensure a safer driving experience.\n"
+            ), font=("Arial", 12), wraplength=700, justify="left")
+            description_label.pack(pady=20, padx=20)
+
+        if LESSON_ID == 2:
+            description_label = tk.Label(canvas_frame, text=(
+            "✴ Lesson 3: Navigating Roundabouts Properly\n\n"
+            "✴ What was tested?\n"
+            "✦ You entered a two-lane roundabout while driving in the left lane, while another car in the right lane was also navigating the roundabout.\n\n"
+            "✴ What could have happened?\n"
+            "✦ If you checked your surroundings and anticipated other drivers' movements, you would have been able to adjust your position accordingly and navigate the roundabout smoothly.\n"
+            "✦ If you proceeded without being fully aware of the vehicle in the right lane, there was a risk of a collision if the other car is turning left .\n"
+            "\n✴ Key takeaway:\n"
+            "✦ When navigating roundabouts, stay aware of surrounding vehicles, anticipate lane changes, and adjust your speed accordingly. Checking blind spots and understanding right-of-way rules help ensure a safe passage through intersections.\n"
+            ), font=("Arial", 12), wraplength=700, justify="left")
+            description_label.pack(pady=20, padx=20)
+
+
+
+
     disable_auto_pilot_cars()
 
     # Create the buttons
@@ -463,12 +517,22 @@ def show_telemetry(world,client):
     button3 = tk.Button(button_frame, text="Table", command=show_table)
     button3.pack(side=tk.LEFT, padx=10, pady=10)
 
+    button4 = tk.Button(button_frame, text="Lesson Description", command=show_description)
+    button4.pack(side=tk.LEFT, padx=10, pady=10)
+
     # Create a frame for displaying the plot or table
     canvas_frame = tk.Frame(root)
     canvas_frame.pack(fill=tk.BOTH, expand=True)
 
     start_replaying_b = tk.Button(button_frame, text="start Replaying", command=start_replaying)
     start_replaying_b.pack(side=tk.LEFT, padx=10, pady=10)
+
+
+
+
+    canvas_frame = tk.Frame(root)
+    canvas_frame.pack(fill=tk.BOTH, expand=True)
+
     # Start the Tkinter main loop
     root.mainloop()
 def update_Speed_info(speed):
@@ -1003,7 +1067,7 @@ class World(object):
         self.camera_manager.index = None
 
     def modify_beyond_car_args(self):
-        global auto_piloted_y_list,auto_piloted_x_list,ran_autopilot_x,ran_autopilot_y
+        global auto_piloted_y_list,auto_piloted_x_list,ran_autopilot_x,ran_autopilot_y,traffic_manager
         # print(f"grepdbg_steer (x,y) = ({self.player.get_transform().location.x},{self.player.get_transform().location.y}) steer {self.player.get_control().steer}")
 
         if LESSON_ID == 0:
@@ -1040,13 +1104,17 @@ class World(object):
                 ran_autopilot_y = True
                 for car in auto_piloted_y_list:
                     print(f"setting {car} to be autopiloted")
-                    auto_piloted_y_list[car].set_autopilot(True)
+                    auto_piloted_y_list[car].set_autopilot(True,traffic_manager.get_port())
+                    traffic_manager.set_route(auto_piloted_y_list[car], ["Straight","Left","Straight"])
+
 
             if ran_autopilot_x is False and self.player.get_transform().location.y >= -75.0:
+                self.hud.lesson_notification("At the roundabout continue straight", seconds=2)
                 ran_autopilot_x = True
                 for car in auto_piloted_x_list:
                     print(f"setting {car} to be autopiloted")
-                    auto_piloted_x_list[car].set_autopilot(True)
+                    auto_piloted_x_list[car].set_autopilot(True,traffic_manager.get_port())
+                    traffic_manager.set_route(auto_piloted_x_list[car], ["Left","Straight","Straight","Left"])
 
 
     def destroy(self):
@@ -1468,7 +1536,9 @@ class HUD(object):
         mono = default_font if default_font in fonts else fonts[0]
         mono = pygame.font.match_font(mono)
         self._font_mono = pygame.font.Font(mono, 12 if os.name == 'nt' else 14)
+        if DEBUG_EN: print(f"width = {width}, height = {height}")
         self._notifications = FadingText(font, (width, 40), (0, height - 40))
+        self.lesson_notifications = FadingText(font, (width // 2, 40), (200, (height - 40) // 2))
         self.help = HelpText(pygame.font.Font(mono, 16), width, height)
         self.server_fps = 0
         self.frame = 0
@@ -1488,6 +1558,7 @@ class HUD(object):
 
     def tick(self, world, clock):
         self._notifications.tick(world, clock)
+        self.lesson_notifications.tick(world, clock)
         if not self._show_info:
             return
         t = world.player.get_transform()
@@ -1575,6 +1646,9 @@ class HUD(object):
     def notification(self, text, seconds=2.0):
         self._notifications.set_text(text, seconds=seconds)
 
+    def lesson_notification(self, text, seconds=2.0):
+        self.lesson_notifications.set_text(text, seconds=seconds)
+
     def error(self, text):
         self._notifications.set_text('Error: %s' % text, (255, 0, 0))
 
@@ -1614,6 +1688,7 @@ class HUD(object):
                     display.blit(surface, (8, v_offset))
                 v_offset += 18
         self._notifications.render(display)
+        self.lesson_notifications.render(display)
         self.help.render(display)
 
 
@@ -2052,7 +2127,7 @@ class CameraManager(object):
 
 import inputs
 def game_loop(args):
-    global start_flag
+    global start_flag,traffic_manager
 
     pygame.init()
     pygame.font.init()
@@ -2068,6 +2143,12 @@ def game_loop(args):
             client.load_world("Town10HD_Opt")
             # client.load_world("Town10HD_Opt")
 
+        if LESSON_ID == 2:
+            traffic_manager = client.get_trafficmanager(8000)  # Port for Traffic Manager
+            traffic_manager.set_global_distance_to_leading_vehicle(2.0)
+            print(f"SET THE TRAFFIC MANAGER ! {traffic_manager}")
+
+
         sim_world = client.get_world()
         if args.sync:
             original_settings = sim_world.get_settings()
@@ -2077,8 +2158,8 @@ def game_loop(args):
                 settings.fixed_delta_seconds = 0.05
             sim_world.apply_settings(settings)
 
-            traffic_manager = client.get_trafficmanager()
-            traffic_manager.set_synchronous_mode(True)
+            _traffic_manager = client.get_trafficmanager()
+            _traffic_manager.set_synchronous_mode(True)
 
         if args.autopilot and not sim_world.get_settings().synchronous_mode:
             print("WARNING: You are currently in asynchronous mode and could "
