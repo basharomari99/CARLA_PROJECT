@@ -100,7 +100,7 @@ PRINT_SPAWN_POINTS = False
 ####################################################
 
 ################METADATA #############
-LESSON_ID = 0
+LESSON_ID = 2
 traffic_manager = None
 SPAWN_POINT_PLAYER_INDEX_DICT = {0: 128, 1:85, 2:240}#85
 BEYOND_CAR_INDEX_DICT = {0: 18,1:18}
@@ -318,7 +318,7 @@ class RecordingHandler():
                 self.stop_recording(client,world)
 
         if LESSON_ID == 2:
-            if world.player.get_transform().location.y > -75.0:
+            if world.player.get_transform().location.y > -75.0 and (not world.recording_enabled) and (not self.worked):
                 self.start_recording(client, world)
             if world.player.get_transform().location.y >= 30:
                 self.stop_recording(client,world)
@@ -2190,6 +2190,13 @@ def game_loop(args):
             sim_world.wait_for_tick()
 
         clock = pygame.time.Clock()
+
+        if LESSON_ID == 0 :
+            world.hud.lesson_notification("Follow the front car", seconds=2)
+        if LESSON_ID == 1:
+            world.hud.lesson_notification("Continue straight", seconds=2)
+        if LESSON_ID == 2:
+            world.hud.lesson_notification("Move to the left lane", seconds=2)
 
         while True:
             if args.sync:
